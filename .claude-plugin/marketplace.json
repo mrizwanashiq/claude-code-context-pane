@@ -1,0 +1,5 @@
+{
+  "name": "context-pane",
+  "owner": { "name": "mrizwanashiq" },
+  "plugins": [{ "name": "context-pane", "source": "./" }]
+}

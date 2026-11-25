@@ -1,0 +1,10 @@
+{
+  "name": "context-pane",
+  "version": "0.1.0",
+  "description": "Side pane with environment, context window breakdown, connectors and quick settings, like the Claude Code web sidebar",
+  "author": { "name": "mrizwanashiq" },
+  "homepage": "https://github.com/mrizwanashiq/claude-code-context-pane",
+  "repository": "https://github.com/mrizwanashiq/claude-code-context-pane",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
