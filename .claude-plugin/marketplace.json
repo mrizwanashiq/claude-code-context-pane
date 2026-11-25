@@ -1,5 +1,5 @@
 {
-  "name": "session-cockpit",
-  "owner": { "name": "mrizwanashiq" },
-  "plugins": [{ "name": "session-cockpit", "source": "./" }]
+  "name": "rizwanashiq",
+  "owner": { "name": "Rizwan Ashiq", "url": "https://rizwanashiq.com" },
+  "plugins": [{ "name": "session-cockpit", "source": "./", "description": "Usage limits, cost, context and session guardrails in a pane beside the chat" }]
 }

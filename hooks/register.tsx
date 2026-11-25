@@ -5,6 +5,12 @@ import type { Connector, Item, Limit, Row, Setting, Snapshot, Today, Weekly } fr
 
 const PALETTE = ['#5b8def', '#e07a3f', '#3fb58f', '#a78bfa', '#d4a72c', '#e0607e', '#38bdf8', '#94a3b8']
 
+// rizwanashiq.com brand: one oxblood accent, hairline rules, no cards.
+// ponytail: the dark-theme accent only; switch to #8a2b1d when the pane exposes the light theme
+const ACCENT = '#e3907c'
+const BRAND_URL = 'https://rizwanashiq.com'
+const RULE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 1" preserveAspectRatio="none"><rect width="300" height="1" fill="#3a3a3f"/></svg>'
+
 const PANE = 'session-cockpit'
 const snap = atom({ plugin: 'session-cockpit', key: 'snap' } as const, null, { shape: 'snap-10' })
 const openConnector = atom({ plugin: 'session-cockpit', key: 'open' } as const, null, { shape: 'open-1' })
@@ -15,7 +21,7 @@ const guard = atom({ plugin: 'session-cockpit', key: 'guard' } as const, { advis
 let opts = { cap: 200000, warn: 80, advisorBudget: 2, pinned: new Set<string>() }
 
 const k = (n: number) =>
-  n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`
+  n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${+(n / 1000).toFixed(1)}K` : `${n}`
 
 const serverName = (raw: string) =>
   raw.replace(/^claude_ai_/, '').replace(/^plugin_[^_]+_/, '').replace(/_/g, ' ')
@@ -352,15 +358,17 @@ export const register: Register = (on, options) => {
         return seg
       })
       .join('')
-    const bar = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 8" preserveAspectRatio="none"><clipPath id="c"><rect width="300" height="8" rx="4"/></clipPath><g clip-path="url(#c)"><rect width="300" height="8" fill="#2a2a2e"/>${segs}${capX < 300 ? `<rect x="${(capX - 1).toFixed(2)}" y="0" width="2" height="8" fill="#e0607e"/>` : ''}</g></svg>`
+    const bar = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 8" preserveAspectRatio="none"><clipPath id="c"><rect width="300" height="8" rx="4"/></clipPath><g clip-path="url(#c)"><rect width="300" height="8" fill="#2a2a2e"/>${segs}${capX < 300 ? `<rect x="${(capX - 1).toFixed(2)}" y="0" width="2" height="8" fill="${ACCENT}"/>` : ''}</g></svg>`
     const overCap = s.tokens >= opts.cap
 
+    const rule = Svg ? <Svg source={RULE} alt="" height={1} /> : <Text dimColor>{'─'.repeat(30)}</Text>
     const section = (title: string, aside: string | null, body: RenderChildren) => (
       <Box flexDirection="column" gap="sm">
-        <Box flexDirection="row" justifyContent="space-between">
-          <Text size="caption" weight="semibold" dimColor>{title.toUpperCase()}</Text>
+        <Box flexDirection="row" justifyContent="space-between" alignItems="center">
+          <Text size="caption" weight="semibold" color={ACCENT}>{title.toUpperCase()}</Text>
           {aside && <Text size="caption" dimColor>{aside}</Text>}
         </Box>
+        {rule}
         {body}
       </Box>
     )
@@ -383,6 +391,108 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column" gap="xl" padding="md">
+        {section(
+          'Usage',
+          s.cost ? `~$${s.cost.usd.toFixed(2)}${s.cost.unknownPrice ? '*' : ''} this session (est.)` : null,
+          <Box flexDirection="column" gap="xs">
+            {s.limits.length === 0 && kv('Rate limits', <Text dimColor>show after the first reply</Text>)}
+            {s.limits.map(l => {
+              const reset = untilReset(l.resetsAt)
+              return kv(
+                LIMIT_NAMES[l.kind] ?? l.kind,
+                <Box flexDirection="row" gap="sm">
+                  <Text color={limitColor(l.percentUsed)} weight="semibold" tabular>{`${l.percentUsed}%`}</Text>
+                  {reset && <Text dimColor>· resets {reset}</Text>}
+                </Box>,
+              )
+            })}
+            {s.weekly &&
+              kv(
+                'Weekly used today',
+                <Box flexDirection="row" gap="sm">
+                  <Text tabular>{`+${s.weekly.today.toFixed(1)}%`}</Text>
+                  <Text dimColor>· since {clock(s.weekly.todaySince)}</Text>
+                </Box>,
+              )}
+            {s.weekly?.window != null && kv('This 5-hour window', <Text tabular>{`+${s.weekly.window.toFixed(1)}% of weekly`}</Text>)}
+            {s.weekly?.pace != null && kv('Daily pace to last the week', <Text tabular>{`${s.weekly.pace.toFixed(1)}% / day`}</Text>)}
+          </Box>,
+        )}
+
+        {section(
+          'Context',
+          `${k(s.tokens)} / ${k(s.window)} · cap ${k(opts.cap)}`,
+          <Box flexDirection="column" gap="md">
+            <Box flexDirection="row" justifyContent="space-between" alignItems="center">
+              <Text size="heading" weight="semibold" color={overCap ? 'error' : undefined}>{pct(s.tokens)} used</Text>
+              {overCap && <Text color="error">past cap · hand off</Text>}
+            </Box>
+            {Svg ? (
+              <Svg source={bar} alt="Context usage bar, the accent line marks your cap" height={8} />
+            ) : (
+              <Text dimColor>{'█'.repeat(Math.round((s.tokens / s.window) * 30)).padEnd(30, '░')}</Text>
+            )}
+            <Box flexDirection="column" gap="xs">{live.map(r => ctxRow(r))}</Box>
+            {deferred.length > 0 && (
+              <Box flexDirection="column" gap="xs" paddingTop="sm">
+                <Text size="caption" dimColor>Loaded on demand</Text>
+                {deferred.map(r => ctxRow(r, true))}
+              </Box>
+            )}
+            {openable.length > 0 && (
+              <Box flexDirection="column" gap="sm" paddingTop="sm">
+                <Select
+                  key="ctx-detail"
+                  label="Breakdown"
+                  value={picked ? rowId(picked) : ''}
+                  options={[{ value: '', label: 'Choose a category…' }, ...openable.map(r => ({ value: rowId(r), label: r.name }))]}
+                  onSelect={v => update($, openRow, () => v || null)}
+                />
+                {picked &&
+                  detail(
+                    <Box flexDirection="column" gap="xs">
+                      {picked.note ? <Text size="caption" dimColor>{picked.note}</Text> : undefined}
+                      {picked.items.map(it => sub(it.name, k(it.tokens)))}
+                    </Box>,
+                  )}
+              </Box>
+            )}
+          </Box>,
+        )}
+
+        {s.today &&
+          section(
+            'Today, all sessions',
+            s.today.ageMin > 5 ? `updated ${s.today.ageMin} min ago` : null,
+            <Box flexDirection="column" gap="xs">
+              {kv('Tokens', <Text weight="semibold" tabular>{k(s.today.total)}</Text>)}
+              <Box flexDirection="column" gap="xs" paddingLeft="md">
+                {s.today.projects.map(([name, n]) =>
+                  row({ label: name, muted: true, right: [k(n), `${Math.round((n / (s.today?.total || 1)) * 100)}%`] }),
+                )}
+              </Box>
+              {kv('On Opus', <Text color={s.today.opusShare > 80 ? 'warning' : undefined} tabular>{`${s.today.opusShare.toFixed(0)}%`}</Text>)}
+              {kv(
+                'Biggest live context',
+                <Text color={s.today.biggest >= s.today.cap ? 'error' : undefined} tabular>{`${k(s.today.biggest)} / ${k(s.today.cap)}`}</Text>,
+              )}
+              {s.today.live
+                .filter(l => l.ctx >= (s.today?.cap ?? opts.cap))
+                .map(l => (
+                  <Box paddingLeft="md">{row({ dot: ACCENT, label: l.title, muted: true, right: [k(l.ctx), 'over cap'] })}</Box>
+                ))}
+            </Box>,
+          )}
+
+        {section(
+          'Guardrails',
+          null,
+          <Box flexDirection="column" gap="xs">
+            {kv('Advisor calls', <Text color={g.advisor > opts.advisorBudget ? 'warning' : undefined} tabular>{`${g.advisor} / ${opts.advisorBudget}`}</Text>)}
+            {kv('Agents left on Opus', <Text color={g.opus > 0 ? 'warning' : undefined} tabular>{`${g.opus}`}</Text>)}
+          </Box>,
+        )}
+
         {s.repo &&
           section(
             'Environment',
@@ -422,106 +532,6 @@ export const register: Register = (on, options) => {
             </Box>,
           )}
 
-        {(s.limits.length > 0 || s.cost) &&
-          section(
-            'Usage',
-            null,
-            <Box flexDirection="column" gap="xs">
-              {s.limits.map(l => {
-                const reset = untilReset(l.resetsAt)
-                return kv(
-                  LIMIT_NAMES[l.kind] ?? l.kind,
-                  <Box flexDirection="row" gap="sm">
-                    <Text color={limitColor(l.percentUsed)} tabular>{`${l.percentUsed}%`}</Text>
-                    {reset && <Text dimColor>· resets in {reset}</Text>}
-                  </Box>,
-                )
-              })}
-              {s.weekly &&
-                kv(
-                  'Weekly used today',
-                  <Box flexDirection="row" gap="sm">
-                    <Text tabular>{`+${s.weekly.today.toFixed(1)}%`}</Text>
-                    <Text dimColor>· since {clock(s.weekly.todaySince)}</Text>
-                  </Box>,
-                )}
-              {s.weekly?.window != null && kv('Weekly used this 5-hour window', <Text tabular>{`+${s.weekly.window.toFixed(1)}%`}</Text>)}
-              {s.weekly?.pace != null && kv('Pace to last the week', <Text tabular>{`${s.weekly.pace.toFixed(1)}% / day`}</Text>)}
-              {s.cost && kv('Session cost', <Text tabular>{`~$${s.cost.usd.toFixed(2)}${s.cost.unknownPrice ? ' *' : ''} (estimate)`}</Text>)}
-            </Box>,
-          )}
-
-        {s.today &&
-          section(
-            'Today, all sessions',
-            s.today.ageMin > 5 ? `${s.today.ageMin} min old` : null,
-            <Box flexDirection="column" gap="xs">
-              {kv('Tokens', <Text tabular>{k(s.today.total)}</Text>)}
-              {s.today.projects.map(([name, n]) =>
-                row({ label: name, right: [k(n), `${Math.round((n / (s.today?.total || 1)) * 100)}%`] }),
-              )}
-              {kv('On Opus', <Text color={s.today.opusShare > 80 ? 'warning' : undefined} tabular>{`${s.today.opusShare.toFixed(0)}%`}</Text>)}
-              {kv(
-                'Biggest live context',
-                <Text color={s.today.biggest >= s.today.cap ? 'error' : undefined} tabular>{`${k(s.today.biggest)} / ${k(s.today.cap)}`}</Text>,
-              )}
-              {s.today.live
-                .filter(l => l.ctx >= (s.today?.cap ?? opts.cap))
-                .map(l => row({ dot: '#e0607e', label: l.title, right: [k(l.ctx), 'over cap'] }))}
-            </Box>,
-          )}
-
-        {section(
-          'Guardrails',
-          null,
-          <Box flexDirection="column" gap="xs">
-            {kv(
-              'Context cap',
-              <Text color={overCap ? 'error' : undefined} tabular>{`${k(s.tokens)} / ${k(opts.cap)}${overCap ? ' · hand off now' : ''}`}</Text>,
-            )}
-            {kv('Advisor calls', <Text color={g.advisor > opts.advisorBudget ? 'warning' : undefined} tabular>{`${g.advisor} / ${opts.advisorBudget}`}</Text>)}
-            {kv('Agents without a cheaper model', <Text color={g.opus > 0 ? 'warning' : undefined} tabular>{`${g.opus}`}</Text>)}
-          </Box>,
-        )}
-
-        {section(
-          'Context',
-          `${k(s.tokens)} / ${k(s.window)}`,
-          <Box flexDirection="column" gap="md">
-            <Text size="heading" weight="semibold">{pct(s.tokens)} used</Text>
-            {Svg ? (
-              <Svg source={bar} alt="Context usage bar" height={8} />
-            ) : (
-              <Text dimColor>{'█'.repeat(Math.round((s.tokens / s.window) * 30)).padEnd(30, '░')}</Text>
-            )}
-            <Box flexDirection="column" gap="xs">{live.map(r => ctxRow(r))}</Box>
-            {deferred.length > 0 && (
-              <Box flexDirection="column" gap="xs" paddingTop="sm">
-                <Text size="caption" dimColor>Loaded on demand</Text>
-                {deferred.map(r => ctxRow(r, true))}
-              </Box>
-            )}
-            {openable.length > 0 && (
-              <Box flexDirection="column" gap="sm" paddingTop="sm">
-                <Select
-                  key="ctx-detail"
-                  label="Breakdown"
-                  value={picked ? rowId(picked) : ''}
-                  options={[{ value: '', label: 'Choose a category…' }, ...openable.map(r => ({ value: rowId(r), label: r.name }))]}
-                  onSelect={v => update($, openRow, () => v || null)}
-                />
-                {picked &&
-                  detail(
-                    <Box flexDirection="column" gap="xs">
-                      {picked.note ? <Text size="caption" dimColor>{picked.note}</Text> : undefined}
-                      {picked.items.map(it => sub(it.name, k(it.tokens)))}
-                    </Box>,
-                  )}
-              </Box>
-            )}
-          </Box>,
-        )}
-
         {s.connectors.length > 0 &&
           section(
             'Connectors',
@@ -552,6 +562,14 @@ export const register: Register = (on, options) => {
               </Box>
             </Box>,
           )}
+
+        <Box flexDirection="column" gap="sm">
+          {rule}
+          <Box flexDirection="row" justifyContent="space-between" alignItems="center">
+            <Text size="caption" dimColor>Session Cockpit by Rizwan Ashiq</Text>
+            <Link href={BRAND_URL} label="rizwanashiq.com" />
+          </Box>
+        </Box>
       </Box>
     )
   })

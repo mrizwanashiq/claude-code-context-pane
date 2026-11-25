@@ -1,5 +1,7 @@
 # Session Cockpit
 
+By [Rizwan Ashiq](https://rizwanashiq.com).
+
 A pane beside the chat in Claude Code (VS Code extension and desktop app) that keeps your session in view: how close you are to your rate limits, what the session has cost, how full the context window is and what fills it, where the session runs, which MCP connectors are connected, and a few quick settings.
 
 ## What it shows

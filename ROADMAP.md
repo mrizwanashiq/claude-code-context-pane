@@ -30,6 +30,10 @@ A pane beside the chat that keeps a Claude Code session cheap, safe and in view:
 
 ## Next, in order
 
+### 0. First run and customization (asked Nov 25)
+- One-time welcome in the pane on first load: what each section shows, where options live (`/config`), link to this roadmap; a `$.store` flag so it shows once
+- Show/hide and order per section, and remembered Breakdown/Tools picks, saved across sessions; set from `/config` or a Customize select in the pane
+
 ### 1. Cost guardrails (follow-ups)
 - Handoff command past the cap
 - Block mode for the agent guard, once the warning list is tuned

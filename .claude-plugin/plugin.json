@@ -2,7 +2,7 @@
   "name": "session-cockpit",
   "version": "0.2.0",
   "description": "Session Cockpit: usage limits, cost, context breakdown, environment, connectors and quick settings in a pane beside the chat",
-  "author": { "name": "mrizwanashiq" },
+  "author": { "name": "Rizwan Ashiq", "url": "https://rizwanashiq.com" },
   "homepage": "https://github.com/mrizwanashiq/claude-code-context-pane",
   "repository": "https://github.com/mrizwanashiq/claude-code-context-pane",
   "license": "MIT",
