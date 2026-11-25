@@ -1,5 +1,5 @@
 {
-  "name": "context-pane",
+  "name": "session-cockpit",
   "owner": { "name": "mrizwanashiq" },
-  "plugins": [{ "name": "context-pane", "source": "./" }]
+  "plugins": [{ "name": "session-cockpit", "source": "./" }]
 }

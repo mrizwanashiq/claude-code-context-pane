@@ -1,6 +1,6 @@
-# context-pane
+# Session Cockpit
 
-A side pane for Claude Code that shows what the web sidebar shows, inside the VS Code extension (and the desktop app): where the session runs, how full the context window is and what fills it, which MCP connectors are connected, and a few quick settings.
+A pane beside the chat in Claude Code (VS Code extension and desktop app) that keeps your session in view: how close you are to your rate limits, what the session has cost, how full the context window is and what fills it, where the session runs, which MCP connectors are connected, and a few quick settings.
 
 ## What it shows
 
@@ -11,6 +11,10 @@ A side pane for Claude Code that shows what the web sidebar shows, inside the VS
 
 **Settings**
 - Dropdowns for model, effort, thinking, auto-compact, output style and permission mode, read live from `/config`. A row only appears when your version of Claude Code has it and it is not locked by a managed setting.
+
+**Usage**
+- Your 5-hour and weekly rate-limit windows: percentage used and time until reset (subscription accounts only)
+- What the session has cost so far, an estimate, not your bill
 
 **Context**
 - Percentage used, tokens used out of the window, and a stacked bar
@@ -28,7 +32,7 @@ The pane refreshes after every response.
 At the prompt of a Claude Code terminal session:
 
 ```
-/plugin install context-pane --marketplace mrizwanashiq/claude-code-context-pane
+/plugin install session-cockpit --marketplace mrizwanashiq/claude-code-context-pane
 ```
 
 Answer `y` to add the marketplace, then press Enter to install at the user scope. Every session you start afterwards loads the pane, including the VS Code extension.
@@ -36,7 +40,7 @@ Answer `y` to add the marketplace, then press Enter to install at the user scope
 From a shell:
 
 ```
-claude plugin install context-pane --marketplace mrizwanashiq/claude-code-context-pane
+claude plugin install session-cockpit --marketplace mrizwanashiq/claude-code-context-pane
 ```
 
 In the desktop app: click + next to the prompt box, then Plugins, Add marketplace with `mrizwanashiq/claude-code-context-pane`, then Add plugin.
@@ -46,7 +50,7 @@ In the desktop app: click + next to the prompt box, then Plugins, Add marketplac
 The pane opens on its own when a session starts. If you close it, run:
 
 ```
-/context-pane
+/cockpit
 ```
 
 ## Notes
@@ -66,7 +70,7 @@ Clone the repo and point Claude Code at the folder instead of installing it. In 
 }
 ```
 
-The folder is watched, so saving `hooks/register.tsx` reloads the pane. Check your changes with:
+The folder is watched, so saving `hooks/register.tsx` reloads the cockpit. Check your changes with:
 
 ```
 claude plugin validate .

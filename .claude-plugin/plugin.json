@@ -1,10 +1,16 @@
 {
-  "name": "context-pane",
-  "version": "0.1.0",
-  "description": "Side pane with environment, context window breakdown, connectors and quick settings, like the Claude Code web sidebar",
+  "name": "session-cockpit",
+  "version": "0.2.0",
+  "description": "Session Cockpit: usage limits, cost, context breakdown, environment, connectors and quick settings in a pane beside the chat",
   "author": { "name": "mrizwanashiq" },
   "homepage": "https://github.com/mrizwanashiq/claude-code-context-pane",
   "repository": "https://github.com/mrizwanashiq/claude-code-context-pane",
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "contextCap": { "type": "number", "title": "Context cap (tokens)", "description": "Past this, the cockpit tells you to hand off and start a fresh session", "default": 200000 },
+    "warnPercent": { "type": "number", "title": "Warn at %", "description": "Toast once when context or a rate-limit window passes this percentage", "default": 80 },
+    "advisorBudget": { "type": "number", "title": "Advisor calls per session", "description": "Advisor calls past this show as over budget", "default": 2 },
+    "pinnedAgents": { "type": "string", "title": "Agents that set their own model", "description": "Comma-separated agent types that never warn when spawned without a model", "default": "Explore,slack-parser,researcher,worker,browser-tester,token-auditor,fork" }
+  }
 }
