@@ -21,18 +21,19 @@ A pane beside the chat that keeps a Claude Code session cheap, safe and in view:
   - Toasts once each: context past warn %, context past cap, a rate-limit window past warn %
   - `userConfig`: contextCap, warnPercent, advisorBudget, pinnedAgents
   - Tests: `tests/ledger.test.ts` (weekly ledger, meter reader)
+- First run and customization (Nov 25, not yet seen rendered):
+  - Welcome section for the whole first session (`welcomed` flag in `$.store`), toggled again from Layout
+  - Layout select at the bottom: hide/show and move up per section, reset; saved in `$.store` and restored on session start
+  - Breakdown and Tools picks remembered across sessions
+  - Tests: `tests/layout.test.ts`
 
 ## In progress
 
 - `limitColor()` thresholds in `hooks/register.tsx` (TODO left for Rizwan)
-- Screenshot check in VS Code of the Settings, Usage, Today and Guardrails sections
+- Screenshot check in VS Code of the Settings, Usage, Today, Guardrails, Welcome and Layout sections
 - Agent guard only warns; no resolved model is exposed at spawn, so a type not in `pinnedAgents` whose definition sets a model still warns
 
 ## Next, in order
-
-### 0. First run and customization (asked Nov 25)
-- One-time welcome in the pane on first load: what each section shows, where options live (`/config`), link to this roadmap; a `$.store` flag so it shows once
-- Show/hide and order per section, and remembered Breakdown/Tools picks, saved across sessions; set from `/config` or a Customize select in the pane
 
 ### 1. Cost guardrails (follow-ups)
 - Handoff command past the cap

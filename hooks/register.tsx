@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, RenderChildren } from 'claude-code'
 
-import type { Connector, Item, Limit, Row, Setting, Snapshot, Today, Weekly } from '../types'
+import type { Connector, Item, Layout, Limit, Row, Setting, Snapshot, Today, Weekly } from '../types'
 
 const PALETTE = ['#5b8def', '#e07a3f', '#3fb58f', '#a78bfa', '#d4a72c', '#e0607e', '#38bdf8', '#94a3b8']
 
@@ -17,6 +17,38 @@ const openConnector = atom({ plugin: 'session-cockpit', key: 'open' } as const, 
 const openTool = atom({ plugin: 'session-cockpit', key: 'tool' } as const, null, { shape: 'tool-1' })
 const openRow = atom({ plugin: 'session-cockpit', key: 'row' } as const, null, { shape: 'row-1' })
 const guard = atom({ plugin: 'session-cockpit', key: 'guard' } as const, { advisor: 0, opus: 0, warned: [] as string[] }, { shape: 'guard-1' })
+
+export const SECTIONS = ['usage', 'context', 'today', 'guardrails', 'environment', 'settings', 'connectors'] as const
+const TITLES: Record<string, string> = {
+  usage: 'Usage', context: 'Context', today: 'Today, all sessions', guardrails: 'Guardrails',
+  environment: 'Environment', settings: 'Settings', connectors: 'Connectors',
+}
+const layout = atom({ plugin: 'session-cockpit', key: 'layout' } as const, { order: [...SECTIONS] as string[], hidden: [] as string[] }, { shape: 'layout-1' })
+const welcome = atom({ plugin: 'session-cockpit', key: 'welcome' } as const, false, { shape: 'welcome-1' })
+const ROADMAP_URL = 'https://github.com/mrizwanashiq/claude-code-context-pane/blob/main/ROADMAP.md'
+
+// Atoms redraw the pane; $.store keeps the value for the next session. Picks and layout go through both.
+// ponytail: each write names its atom literally, the hooks scan rejects an atom passed as a variable
+const hydrate = async ($: any) => {
+  const [l, r, o, t] = await Promise.all(['layout', 'row', 'open', 'tool'].map(key => $.store.get(key)))
+  if (l !== undefined) await update($, layout, () => arrange(l as Layout, ''))
+  if (r !== undefined) await update($, openRow, () => r as string | null)
+  if (o !== undefined) await update($, openConnector, () => o as string | null)
+  if (t !== undefined) await update($, openTool, () => t as string | null)
+}
+
+// A stored order from an older version may miss sections added since; they go at the end.
+export const arrange = (l: Layout, action: string): Layout => {
+  const order = [...l.order.filter(id => (SECTIONS as readonly string[]).includes(id)), ...SECTIONS.filter(id => !l.order.includes(id))]
+  const [verb, id] = action.split(':')
+  const i = order.indexOf(id ?? '')
+  if (verb === 'reset') return { order: [...SECTIONS], hidden: [] }
+  if (i < 0) return { order, hidden: l.hidden }
+  if (verb === 'hide') return { order, hidden: [...new Set([...l.hidden, id!])] }
+  if (verb === 'show') return { order, hidden: l.hidden.filter(h => h !== id) }
+  if (verb === 'up' && i > 0) [order[i - 1], order[i]] = [order[i]!, order[i - 1]!]
+  return { order, hidden: l.hidden }
+}
 
 let opts = { cap: 200000, warn: 80, advisorBudget: 2, pinned: new Set<string>() }
 
@@ -271,6 +303,12 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'cockpit', description: 'Open the Session Cockpit pane' })
+    await hydrate($)
+    // Shown for the whole first session, then never again unless picked from Customize.
+    if (!(await $.store.get('welcomed'))) {
+      await $.store.set('welcomed', true)
+      await update($, welcome, () => true)
+    }
     void $.ui.open({ id: PANE, title: 'Cockpit' })
     void refresh($)
     return next(e)
@@ -293,7 +331,7 @@ export const register: Register = (on, options) => {
     const Svg = 'Svg' in ui ? ui.Svg : null
     const s = await read($, snap)
     if (!s) return <Text dimColor>Measuring…</Text>
-    const [rowOpen, connOpen, toolOpen, g] = await Promise.all([read($, openRow), read($, openConnector), read($, openTool), read($, guard)])
+    const [rowOpen, connOpen, toolOpen, g, lay, showWelcome] = await Promise.all([read($, openRow), read($, openConnector), read($, openTool), read($, guard), read($, layout), read($, welcome)])
     const toolDesc = toolOpen
       ? ((await $.tool.list()).find((t: any) => t.name.endsWith(`__${toolOpen.split('::')[1]}`) && t.name.includes(toolOpen.split('::')[0]))?.description ?? '')
       : ''
@@ -389,9 +427,8 @@ export const register: Register = (on, options) => {
       </Box>
     )
 
-    return (
-      <Box flexDirection="column" gap="xl" padding="md">
-        {section(
+    const parts: Record<string, RenderChildren> = {
+      usage: section(
           'Usage',
           s.cost ? `~$${s.cost.usd.toFixed(2)}${s.cost.unknownPrice ? '*' : ''} this session (est.)` : null,
           <Box flexDirection="column" gap="xs">
@@ -417,9 +454,9 @@ export const register: Register = (on, options) => {
             {s.weekly?.window != null && kv('This 5-hour window', <Text tabular>{`+${s.weekly.window.toFixed(1)}% of weekly`}</Text>)}
             {s.weekly?.pace != null && kv('Daily pace to last the week', <Text tabular>{`${s.weekly.pace.toFixed(1)}% / day`}</Text>)}
           </Box>,
-        )}
+        ),
 
-        {section(
+      context: section(
           'Context',
           `${k(s.tokens)} / ${k(s.window)} · cap ${k(opts.cap)}`,
           <Box flexDirection="column" gap="md">
@@ -446,7 +483,10 @@ export const register: Register = (on, options) => {
                   label="Breakdown"
                   value={picked ? rowId(picked) : ''}
                   options={[{ value: '', label: 'Choose a category…' }, ...openable.map(r => ({ value: rowId(r), label: r.name }))]}
-                  onSelect={v => update($, openRow, () => v || null)}
+                  onSelect={async v => {
+                    await update($, openRow, () => v || null)
+                    await $.store.set('row', v || null)
+                  }}
                 />
                 {picked &&
                   detail(
@@ -458,9 +498,9 @@ export const register: Register = (on, options) => {
               </Box>
             )}
           </Box>,
-        )}
+        ),
 
-        {s.today &&
+      today: s.today &&
           section(
             'Today, all sessions',
             s.today.ageMin > 5 ? `updated ${s.today.ageMin} min ago` : null,
@@ -482,18 +522,18 @@ export const register: Register = (on, options) => {
                   <Box paddingLeft="md">{row({ dot: ACCENT, label: l.title, muted: true, right: [k(l.ctx), 'over cap'] })}</Box>
                 ))}
             </Box>,
-          )}
+          ),
 
-        {section(
+      guardrails: section(
           'Guardrails',
           null,
           <Box flexDirection="column" gap="xs">
             {kv('Advisor calls', <Text color={g.advisor > opts.advisorBudget ? 'warning' : undefined} tabular>{`${g.advisor} / ${opts.advisorBudget}`}</Text>)}
             {kv('Agents left on Opus', <Text color={g.opus > 0 ? 'warning' : undefined} tabular>{`${g.opus}`}</Text>)}
           </Box>,
-        )}
+        ),
 
-        {s.repo &&
+      environment: s.repo &&
           section(
             'Environment',
             null,
@@ -508,9 +548,9 @@ export const register: Register = (on, options) => {
                 </Box>,
               )}
             </Box>,
-          )}
+          ),
 
-        {s.settings.length > 0 &&
+      settings: s.settings.length > 0 &&
           section(
             'Settings',
             null,
@@ -530,9 +570,9 @@ export const register: Register = (on, options) => {
                 />
               ))}
             </Box>,
-          )}
+          ),
 
-        {s.connectors.length > 0 &&
+      connectors: s.connectors.length > 0 &&
           section(
             'Connectors',
             `${s.connectors.length} connected`,
@@ -547,6 +587,8 @@ export const register: Register = (on, options) => {
                   onSelect={async v => {
                     await update($, openTool, () => null)
                     await update($, openConnector, () => v || null)
+                    await $.store.set('tool', null)
+                    await $.store.set('open', v || null)
                   }}
                 />
                 {conn && (
@@ -555,13 +597,70 @@ export const register: Register = (on, options) => {
                     label={`${conn.name} tool`}
                     value={pickedTool ?? ''}
                     options={[{ value: '', label: 'Choose a tool…' }, ...conn.tools.map(t => ({ value: t, label: t.replace(/_/g, ' ') }))]}
-                    onSelect={v => update($, openTool, () => (v ? `${conn.name.replace(/ /g, '_')}::${v}` : null))}
+                    onSelect={async v => {
+                      const t = v ? `${conn.name.replace(/ /g, '_')}::${v}` : null
+                      await update($, openTool, () => t)
+                      await $.store.set('tool', t)
+                    }}
                   />
                 )}
                 {pickedTool && detail(<Text size="caption" dimColor maxLines={10}>{toolDesc || 'No description.'}</Text>)}
               </Box>
             </Box>,
+          ),
+    }
+
+    const order = arrange(lay, '').order
+    const shown = order.filter(id => !lay.hidden.includes(id))
+    const customize = [
+      { value: '', label: 'Customize…' },
+      ...order.flatMap(id => {
+        const hidden = lay.hidden.includes(id)
+        const at = shown.indexOf(id)
+        return [
+          { value: `${hidden ? 'show' : 'hide'}:${id}`, label: `${hidden ? 'Show' : 'Hide'} ${TITLES[id]}` },
+          ...(!hidden && at > 0 ? [{ value: `up:${id}`, label: `Move ${TITLES[id]} up` }] : []),
+        ]
+      }),
+      { value: 'welcome', label: showWelcome ? 'Dismiss welcome' : 'Show welcome' },
+      { value: 'reset', label: 'Reset layout' },
+    ]
+
+    return (
+      <Box flexDirection="column" gap="xl" padding="md">
+        {showWelcome &&
+          section(
+            'Welcome',
+            null,
+            <Box flexDirection="column" gap="xs">
+              <Text size="caption">Session Cockpit keeps this session cheap, safe and in view.</Text>
+              {[
+                ['Usage', 'rate-limit windows, today\'s share of the weekly, cost estimate'],
+                ['Context', 'window used, your cap, what fills it'],
+                ['Today', 'tokens across all sessions, from token_meter.py'],
+                ['Guardrails', 'advisor calls and agents left on Opus'],
+                ['Environment, Settings, Connectors', 'repo sync, quick /config switches, MCP tools'],
+              ].map(([a, b]) => <Text size="caption" dimColor>{`${a}: ${b}`}</Text>)}
+              <Text size="caption" dimColor>Cap, warn % and budgets: /config, plugin options. Hide or reorder sections with Customize at the bottom.</Text>
+              <Link href={ROADMAP_URL} label="Roadmap" />
+            </Box>,
           )}
+
+        {shown.map(id => parts[id]).filter(Boolean)}
+
+        <Select
+          key="customize"
+          label="Layout"
+          value=""
+          options={customize}
+          onSelect={async v => {
+            if (!v) return
+            if (v === 'welcome') return update($, welcome, w => !w)
+            const next = arrange(lay, v)
+            await update($, layout, () => next)
+            await $.store.set('layout', next)
+          }}
+        />
 
         <Box flexDirection="column" gap="sm">
           {rule}

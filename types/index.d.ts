@@ -31,9 +31,10 @@ export type Today = {
 }
 export type Weekly = { today: number; todaySince: number; window: number | null; pace: number | null }
 export type Guard = { advisor: number; opus: number; warned: string[] }
+export type Layout = { order: string[]; hidden: string[] }
 
 declare module 'claude-code' {
   interface PluginState {
-    'session-cockpit': { snap: Shaped<Snapshot | null>; open: Shaped<string | null>; tool: Shaped<string | null>; row: Shaped<string | null>; guard: Shaped<Guard> }
+    'session-cockpit': { snap: Shaped<Snapshot | null>; open: Shaped<string | null>; tool: Shaped<string | null>; row: Shaped<string | null>; guard: Shaped<Guard>; layout: Shaped<Layout>; welcome: Shaped<boolean> }
   }
 }
