@@ -157,7 +157,21 @@ const settingsOf = async ($: any): Promise<Setting[]> =>
       options: r.kind === 'boolean' ? ['true', 'false'] : [...r.options],
     }))
 
-const LIMIT_NAMES: Record<string, string> = { five_hour: '5-hour window', seven_day: 'Weekly window', spend_limit: 'Spend limit' }
+const LIMIT_NAMES: Record<string, string> = { five_hour: 'Session (5hr)', seven_day: 'Weekly (7 day)', spend_limit: 'Spend limit' }
+
+// "Resets at 5:10 PM" today, "Resets Sun, Nov 29 at 3:00 AM" on another day.
+export const resetLabel = (iso: string | null, now = new Date()) => {
+  if (!iso) return null
+  const d = new Date(iso)
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  if (d.toDateString() === now.toDateString()) return `Resets at ${time}`
+  return `Resets ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${time}`
+}
+
+const meter = (pct: number, fill: string) => {
+  const w = Math.min(Math.max(pct, 0), 100) * 3
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 6" preserveAspectRatio="none"><clipPath id="m"><rect width="300" height="6" rx="3"/></clipPath><g clip-path="url(#m)"><rect width="300" height="6" fill="#2a2a2e"/><rect width="${w.toFixed(2)}" height="6" fill="${fill}"/></g></svg>`
+}
 
 const untilReset = (iso: string | null) => {
   if (!iso) return null
@@ -434,13 +448,20 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column" gap="xs">
             {s.limits.length === 0 && kv('Rate limits', <Text dimColor>show after the first reply</Text>)}
             {s.limits.map(l => {
-              const reset = untilReset(l.resetsAt)
-              return kv(
-                LIMIT_NAMES[l.kind] ?? l.kind,
-                <Box flexDirection="row" gap="sm">
-                  <Text color={limitColor(l.percentUsed)} weight="semibold" tabular>{`${l.percentUsed}%`}</Text>
-                  {reset && <Text dimColor>· resets {reset}</Text>}
-                </Box>,
+              const reset = resetLabel(l.resetsAt)
+              return (
+                <Box flexDirection="column" gap="xs" paddingBottom="sm">
+                  <Box flexDirection="row" justifyContent="space-between" alignItems="center">
+                    <Text>{LIMIT_NAMES[l.kind] ?? l.kind}</Text>
+                    <Text color={limitColor(l.percentUsed)} tabular>{`${l.percentUsed}%`}</Text>
+                  </Box>
+                  {Svg ? (
+                    <Svg source={meter(l.percentUsed, '#3b7ddd')} alt={`${l.percentUsed}% used`} height={6} />
+                  ) : (
+                    <Text dimColor>{'█'.repeat(Math.round(l.percentUsed / 100 * 30)).padEnd(30, '░')}</Text>
+                  )}
+                  {reset && <Text size="caption" dimColor>{reset}</Text>}
+                </Box>
               )
             })}
             {s.weekly &&
